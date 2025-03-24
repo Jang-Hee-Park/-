@@ -1,0 +1,86 @@
+#include "HX711.h"
+
+// FSR 핀들
+#define FSR1 A0
+#define FSR2 A1
+#define FSR3 A2
+#define FSR4 A3  // 선택적 사용
+
+// HX711 로드셀 핀들
+#define LOADCELL_DOUT1 4
+#define LOADCELL_SCK1 5
+#define LOADCELL_DOUT2 6
+#define LOADCELL_SCK2 7
+
+HX711 scale1;
+HX711 scale2;
+
+int stepCount = 0;
+bool isStepActive = false;
+
+// 임계값
+const int fsrThreshold = 100;           // FSR 아날로그 입력 기준
+const long loadcellThreshold = 1000;    // HX711 단위 기준
+
+void setup() {
+  Serial.begin(115200);
+
+  // HX711 초기화
+  scale1.begin(LOADCELL_DOUT1, LOADCELL_SCK1);
+  scale2.begin(LOADCELL_DOUT2, LOADCELL_SCK2);
+
+  scale1.set_scale();
+  scale1.tare();
+  scale2.set_scale();
+  scale2.tare();
+
+  Serial.println("🥿 스마트 인솔 - 걸음 측정 시작");
+}
+
+void loop() {
+  // FSR 값 읽기
+  int fsr1 = analogRead(FSR1);
+  int fsr2 = analogRead(FSR2);
+  int fsr3 = analogRead(FSR3);
+  int fsr4 = analogRead(FSR4); // 사용하지 않으면 제거 가능
+
+  // 로드셀 값 읽기
+  long load1 = scale1.get_units();
+  long load2 = scale2.get_units();
+
+  // 디버깅 출력
+  Serial.print("FSRs: ");
+  Serial.print(fsr1); Serial.print(" ");
+  Serial.print(fsr2); Serial.print(" ");
+  Serial.print(fsr3); Serial.print(" ");
+  Serial.print(fsr4); Serial.print(" | ");
+  Serial.print("Loads: ");
+  Serial.print(load1); Serial.print(" ");
+  Serial.print(load2); Serial.print(" | ");
+  Serial.print("Steps: "); Serial.println(stepCount);
+
+  // 센서 중 하나라도 밟혔는지 확인
+  bool fsrPressed = (fsr1 > fsrThreshold) || (fsr2 > fsrThreshold) ||
+                    (fsr3 > fsrThreshold) || (fsr4 > fsrThreshold);
+  bool loadcellPressed = (load1 > loadcellThreshold) || (load2 > loadcellThreshold);
+
+  bool anySensorPressed = fsrPressed || loadcellPressed;
+
+  // 걸음 인식: 센서 밟힘 & 이전에 밟은 상태가 아님
+  if (anySensorPressed && !isStepActive) {
+    stepCount++;
+    isStepActive = true;
+
+    if (stepCount % 100 == 0) {
+      Serial.print("🎉 100걸음 돌파! 현재 걸음 수: ");
+      Serial.println(stepCount);
+    }
+  }
+
+  // 발이 떨어진 경우 → 다시 걸음 인식 가능하게
+  if (!anySensorPressed) {
+    isStepActive = false;
+  }
+
+  delay(50); // 안정성 확보를 위한 짧은 딜레이
+}
